@@ -58,6 +58,7 @@ const prepareSubdomains = (inputs) => {
     // Check if referenced Component is using AWS API Gateway...
     if (inputs.subdomains[subdomain].url.includes('execute-api')) {
       domainObj.apiId = inputs.subdomains[subdomain].url.split('.')[0].split('//')[1]
+      domainObj.stage = inputs.subdomains[subdomain].url.split('/')[3]
       domainObj.type = 'awsApiGateway'
     }
 
@@ -328,20 +329,20 @@ const configureDnsForApigDomain = async (
 /**
  * Map API Gateway API to the created API Gateway Domain
  */
-const mapDomainToApi = async (apig, domain, apiId) => {
+const mapDomainToApi = async (apig, domain, apiId, stage) => {
   try {
     const params = {
       domainName: domain,
       restApiId: apiId,
       basePath: '(none)',
-      stage: 'production'
+      stage: stage
     }
     // todo what if it already exists but for a different apiId
     return apig.createBasePathMapping(params).promise()
   } catch (e) {
     if (e.code === 'TooManyRequestsException') {
       await utils.sleep(2000)
-      return mapDomainToApi(apig, domain, apiId)
+      return mapDomainToApi(apig, domain, apiId, stage)
     }
     throw e
   }
@@ -357,7 +358,7 @@ const deployApiDomain = async (
 ) => {
   try {
     that.context.debug(`Mapping domain ${subdomain.domain} to API ID ${subdomain.apiId}`)
-    await mapDomainToApi(apig, subdomain.domain, subdomain.apiId)
+    await mapDomainToApi(apig, subdomain.domain, subdomain.apiId, subdomain.stage)
   } catch (e) {
     if (e.message === 'Invalid domain name identifier specified') {
       that.context.debug(`Domain ${subdomain.domain} not found in API Gateway. Creating...`)
